@@ -179,7 +179,7 @@ function Checklist({ session, onMark, onRequestDelete }: {
       ) : (
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-6">
           {active.map((e) => (
-            <li key={e.n} className="cv-auto">
+            <li key={e.n} className={active.length > 300 ? "cv-auto" : undefined}>
               <button
                 type="button"
                 aria-haspopup="menu"
