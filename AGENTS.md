@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- ZChecklist is a single-route SPA (src/routes/index.tsx) with screens switched by React state; all counts/report text derive from src/lib/zchecklist.ts so UI and download never disagree. Persistence is localStorage only (no backend), per spec.
