@@ -14,7 +14,69 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      checklists: {
+        Row: {
+          category: string
+          checklist_date: string
+          completed_at: string | null
+          created_at: string
+          id: string
+          member_count: number
+          name: string
+          statuses: string
+          updated_at: string
+          user_id: string
+          version: number
+        }
+        Insert: {
+          category: string
+          checklist_date: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          member_count: number
+          name: string
+          statuses: string
+          updated_at?: string
+          user_id?: string
+          version?: number
+        }
+        Update: {
+          category?: string
+          checklist_date?: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          member_count?: number
+          name?: string
+          statuses?: string
+          updated_at?: string
+          user_id?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          name: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          username?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
