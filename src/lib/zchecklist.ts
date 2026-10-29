@@ -108,7 +108,7 @@ export const toISODate = (y: number, m: number, d: number) => `${y}-${two(m)}-${
 export function isValidISODate(iso: string) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
   if (!m) return false;
-  const y = +m[1], mo = +m[2], d = +m[3];
+  const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
   const dt = new Date(Date.UTC(y, mo - 1, d));
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d;
 }
@@ -116,19 +116,20 @@ export function isValidISODate(iso: string) {
 export function parseDDMMYY(raw: string): string | null {
   const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/.exec(raw.trim());
   if (!m) return null;
-  const y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
-  const iso = toISODate(y, +m[2], +m[1]);
+  const ys = m[3] ?? "";
+  const y = ys.length === 2 ? 2000 + Number(ys) : Number(ys);
+  const iso = toISODate(y, Number(m[2]), Number(m[1]));
   return isValidISODate(iso) ? iso : null;
 }
 export function formatDDMMYY(iso: string) {
   const [y, m, d] = iso.split("-");
-  return `${d}/${m}/${y.slice(2)}`;
+  return `${d}/${m}/${(y ?? "").slice(2)}`;
 }
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 export const monthKey = (iso: string) => iso.slice(0, 7);
 export const monthLabel = (key: string) => `${MONTHS[+key.slice(5, 7) - 1]} ${key.slice(0, 4)}`;
 export function longDate(iso: string) {
-  const [y, m, d] = iso.split("-").map(Number);
+  const [y = 0, m = 1, d = 1] = iso.split("-").map(Number);
   const wd = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
   return `${wd}, ${d} ${MONTHS[m - 1]} ${y}`;
 }
