@@ -81,7 +81,7 @@ export function computeAnalytics(items: Checklist[], cats: Category[]): Analytic
   if (dates.length < 2) {
     improvementNote = "Improvement needs reports on at least two different dates.";
   } else {
-    const cut = dates[Math.floor(dates.length / 2) - 1];
+    const cut = dates[Math.floor(dates.length / 2) - 1] ?? "";
     const early = new Map<number, [number, number]>(), late = new Map<number, [number, number]>();
     for (const c of reports) {
       const bucket = c.checklist_date <= cut ? early : late;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateCount, createSession, setStatus, summarize, buildReportText } from "@/lib/zchecklist";
+import { validateCount, createSession, setStatus, summarize, buildReportText } from "@/lib/zchecklist-local";
 
 describe("zchecklist rules", () => {
   it("accepts 1000 and rejects 0, decimals, negatives, text", () => {

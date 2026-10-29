@@ -3,7 +3,7 @@ import { AlertTriangle, Check, ChevronDown, CircleDashed, Download, LogOut, Tras
 import {
   type Session, type EntryStatus, createSession, setStatus, summarize, loadSession, saveSession,
   validateCount, downloadReport, fmtDate, pct,
-} from "@/lib/zchecklist";
+} from "@/lib/zchecklist-local";
 
 type Screen = "welcome" | "setup" | "checklist" | "report";
 type Prompt = null | "resume" | "confirmNew" | "deleteEntry" | "unmarked";
