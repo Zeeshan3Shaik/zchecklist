@@ -1,162 +1,210 @@
-export type EntryStatus = "unmarked" | "done" | "not_done" | "deleted";
-export type Stage = "checklist" | "report";
+/* Pure checklist rules shared by the UI, downloads, history and analytics. */
 
-export interface Entry {
-  n: number;
-  status: EntryStatus;
-  updatedAt?: number;
-}
+export type StatusCode = "u" | "d" | "n" | "a"; // unmarked, done, not done, absent
+export type Category = "classworks" | "homeworks" | "attendance" | "miscellaneous";
 
-export interface Session {
-  version: 1;
+export const CATEGORIES: { id: Category; label: string }[] = [
+  { id: "classworks", label: "Classworks" },
+  { id: "homeworks", label: "Homeworks" },
+  { id: "attendance", label: "Attendance" },
+  { id: "miscellaneous", label: "Miscellaneous" },
+];
+export const categoryLabel = (c: Category | string) => CATEGORIES.find((x) => x.id === c)?.label ?? String(c);
+export const STATUS_LABEL: Record<StatusCode, string> = { u: "Unmarked", d: "Done", n: "Not Done", a: "Absent" };
+
+export interface Checklist {
   id: string;
-  createdAt: number;
-  updatedAt: number;
-  completedAt?: number;
-  total: number;
-  entries: Entry[];
-  stage: Stage;
+  checklist_date: string; // YYYY-MM-DD calendar date, no timezone
+  category: Category;
+  name: string;
+  member_count: number;
+  statuses: string; // one StatusCode per member, index 0 = member 1
+  version: number;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
 }
 
-export const STORAGE_KEY = "zchecklist_session_v1";
-export const MAX_MEMBERS = 100000;
+export const MAX_MEMBERS = 100;
+export const MAX_NAME = 100;
 
-export function validateCount(raw: string): { ok: true; value: number } | { ok: false; error: string } {
+type V<T> = { ok: true; value: T } | { ok: false; error: string };
+
+export function validateCount(raw: string): V<number> {
   const s = raw.trim();
   if (!s) return { ok: false, error: "Please enter the number of members." };
   if (!/^\d+$/.test(s)) return { ok: false, error: "Please enter a positive whole number (no decimals or symbols)." };
   const v = Number(s);
   if (v < 1) return { ok: false, error: "The number of members must be at least 1." };
-  if (v > MAX_MEMBERS) return { ok: false, error: `Please enter ${MAX_MEMBERS.toLocaleString()} or fewer members.` };
+  if (v > MAX_MEMBERS) return { ok: false, error: `The maximum is ${MAX_MEMBERS} members.` };
   return { ok: true, value: v };
 }
 
-export function createSession(total: number): Session {
-  const now = Date.now();
-  const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `s-${now}-${Math.random().toString(36).slice(2)}`;
-  return {
-    version: 1,
-    id,
-    createdAt: now,
-    updatedAt: now,
-    total,
-    entries: Array.from({ length: total }, (_, i) => ({ n: i + 1, status: "unmarked" as const })),
-    stage: "checklist",
-  };
+export function validateChecklistName(raw: string): V<string> {
+  const s = raw.trim().replace(/\s+/g, " ");
+  if (!s) return { ok: false, error: "Please give your checklist a name." };
+  if (s.length > MAX_NAME) return { ok: false, error: `Please keep the name to ${MAX_NAME} characters or fewer.` };
+  return { ok: true, value: s };
 }
 
-export function setStatus(session: Session, n: number, status: EntryStatus): Session {
-  const idx = n - 1;
-  const cur = session.entries[idx];
-  if (!cur || cur.status === "deleted" || cur.status === status) return session;
-  const now = Date.now();
-  const entries = session.entries.slice();
-  entries[idx] = { n, status, updatedAt: now };
-  return { ...session, entries, updatedAt: now };
+export const normalizeUsername = (raw: string) => raw.trim().toLowerCase();
+export function validateUsername(raw: string): V<string> {
+  const u = normalizeUsername(raw);
+  if (!u) return { ok: false, error: "Please enter a username." };
+  if (!/^[a-z0-9_]{3,24}$/.test(u)) return { ok: false, error: "Use 3–24 letters, numbers or underscores." };
+  return { ok: true, value: u };
+}
+export function validateDisplayName(raw: string): V<string> {
+  const s = raw.trim().replace(/\s+/g, " ");
+  if (!s) return { ok: false, error: "Please enter your name." };
+  if (s.length > 80) return { ok: false, error: "Please keep your name to 80 characters or fewer." };
+  return { ok: true, value: s };
+}
+export function validatePassword(raw: string): V<string> {
+  if (raw.length < 8) return { ok: false, error: "Password must be at least 8 characters." };
+  if (raw.length > 72) return { ok: false, error: "Password must be 72 characters or fewer." };
+  if (!/[A-Za-z]/.test(raw) || !/\d/.test(raw)) return { ok: false, error: "Use at least one letter and one number." };
+  return { ok: true, value: raw };
+}
+/** Username accounts use an internal, non-deliverable sign-in address. */
+export const usernameToEmail = (u: string) => `${normalizeUsername(u)}@users.zchecklist.app`;
+
+export const blankStatuses = (n: number) => "u".repeat(n);
+export function setStatusAt(statuses: string, member: number, s: StatusCode): string {
+  const i = member - 1;
+  if (i < 0 || i >= statuses.length) return statuses;
+  return statuses.slice(0, i) + s + statuses.slice(i + 1);
 }
 
 export interface Summary {
   total: number;
-  active: number;
   done: number[];
   notDone: number[];
-  deleted: number[];
+  absent: number[];
   unmarked: number[];
-  completion: number;
+  donePct: number; // done / total
+  markedPct: number; // (done + not done + absent) / total
 }
-
-export function summarize(session: Session): Summary {
-  const done: number[] = [], notDone: number[] = [], deleted: number[] = [], unmarked: number[] = [];
-  for (const e of session.entries) {
-    if (e.status === "done") done.push(e.n);
-    else if (e.status === "not_done") notDone.push(e.n);
-    else if (e.status === "deleted") deleted.push(e.n);
-    else unmarked.push(e.n);
+export function summarize(statuses: string): Summary {
+  const done: number[] = [], notDone: number[] = [], absent: number[] = [], unmarked: number[] = [];
+  for (let i = 0; i < statuses.length; i++) {
+    const c = statuses[i];
+    (c === "d" ? done : c === "n" ? notDone : c === "a" ? absent : unmarked).push(i + 1);
   }
-  const active = done.length + notDone.length + unmarked.length;
+  const total = statuses.length;
   return {
-    total: session.total,
-    active,
-    done, notDone, deleted, unmarked,
-    completion: active === 0 ? 0 : (done.length / active) * 100,
+    total, done, notDone, absent, unmarked,
+    donePct: total ? (done.length / total) * 100 : 0,
+    markedPct: total ? ((total - unmarked.length) / total) * 100 : 0,
   };
 }
 
-export const pct = (part: number, whole: number) => (whole === 0 ? "0%" : `${((part / whole) * 100).toFixed(1).replace(/\.0$/, "")}%`);
+export const pct = (part: number, whole: number) =>
+  whole === 0 ? "0%" : `${((part / whole) * 100).toFixed(1).replace(/\.0$/, "")}%`;
 
-function isValidSession(x: unknown): x is Session {
-  if (!x || typeof x !== "object") return false;
-  const s = x as Session;
-  return (
-    s.version === 1 && typeof s.id === "string" && typeof s.total === "number" && Array.isArray(s.entries) &&
-    s.entries.length === s.total && (s.stage === "checklist" || s.stage === "report") &&
-    s.entries.every((e, i) => e && e.n === i + 1 && ["unmarked", "done", "not_done", "deleted"].includes(e.status))
-  );
-}
-
-export function loadSession(): Session | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return isValidSession(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-export function saveSession(s: Session): boolean {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
+/* ---------- dates (calendar dates are plain YYYY-MM-DD strings) ---------- */
 const two = (n: number) => String(n).padStart(2, "0");
-export function fileStamp(d: Date) {
-  return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}_${two(d.getHours())}${two(d.getMinutes())}${two(d.getSeconds())}`;
+export const toISODate = (y: number, m: number, d: number) => `${y}-${two(m)}-${two(d)}`;
+export function isValidISODate(iso: string) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return false;
+  const y = +m[1], mo = +m[2], d = +m[3];
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d;
 }
-export const fmtDate = (t: number) =>
+/** Parses DD/MM/YY (or DD/MM/YYYY) into YYYY-MM-DD. Two-digit years are 2000–2099. */
+export function parseDDMMYY(raw: string): string | null {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/.exec(raw.trim());
+  if (!m) return null;
+  const y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
+  const iso = toISODate(y, +m[2], +m[1]);
+  return isValidISODate(iso) ? iso : null;
+}
+export function formatDDMMYY(iso: string) {
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y.slice(2)}`;
+}
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+export const monthKey = (iso: string) => iso.slice(0, 7);
+export const monthLabel = (key: string) => `${MONTHS[+key.slice(5, 7) - 1]} ${key.slice(0, 4)}`;
+export function longDate(iso: string) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const wd = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
+  return `${wd}, ${d} ${MONTHS[m - 1]} ${y}`;
+}
+export const fmtStamp = (t: string | number | Date) =>
   new Date(t).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+
+/* ---------- history grouping ---------- */
+export interface MonthGroup { key: string; label: string; dates: { date: string; items: Checklist[] }[] }
+export function groupHistory(items: Checklist[]): MonthGroup[] {
+  const months = new Map<string, Map<string, Checklist[]>>();
+  for (const c of items) {
+    const mk = monthKey(c.checklist_date);
+    if (!months.has(mk)) months.set(mk, new Map());
+    const dm = months.get(mk)!;
+    if (!dm.has(c.checklist_date)) dm.set(c.checklist_date, []);
+    dm.get(c.checklist_date)!.push(c);
+  }
+  return [...months.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([key, dm]) => ({
+      key, label: monthLabel(key),
+      dates: [...dm.entries()]
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .map(([date, list]) => ({ date, items: list.sort((x, y) => y.created_at.localeCompare(x.created_at)) })),
+    }));
+}
+
+/* ---------- downloads text ---------- */
+export function fileBase(name: string, iso: string) {
+  const safe = name.normalize("NFKD").replace(/[^\w\s-]/g, "").trim().replace(/[\s-]+/g, "_").slice(0, 60) || "Checklist";
+  return `ZChecklist_${safe}_${iso}`;
+}
 
 const list = (a: number[]) => (a.length ? a.join(", ") : "(None)");
 const center = (s: string, w = 50) => " ".repeat(Math.max(0, Math.floor((w - s.length) / 2))) + s;
 
-export function buildReportText(session: Session, generated: Date = new Date()): string {
-  const s = summarize(session);
+export function buildReportText(c: Checklist, generated: Date = new Date()): string {
+  const s = summarize(c.statuses);
   const bar = "=".repeat(50);
   return [
     bar, center("ZCHECKLIST"), center("CHECKLIST REPORT"), bar, "",
-    `Report Generated: ${generated.toLocaleString()}`,
-    `Session Started: ${new Date(session.createdAt).toLocaleString()}`, "",
-    `ORIGINAL TOTAL ENTRIES: ${s.total}`,
-    `ACTIVE ENTRIES: ${s.active}`, "",
+    `Checklist Name: ${c.name}`,
+    `Checklist Date: ${formatDDMMYY(c.checklist_date)} (${longDate(c.checklist_date)})`,
+    `Category: ${categoryLabel(c.category)}`, "",
+    `Created: ${fmtStamp(c.created_at)}`,
+    `Last Updated: ${fmtStamp(c.updated_at)}`,
+    `Completed: ${c.completed_at ? fmtStamp(c.completed_at) : "Not completed"}`,
+    `Report Generated: ${fmtStamp(generated)}`, "",
+    `TOTAL MEMBERS: ${s.total}`, "",
     "------------------ SUMMARY -----------------------", "",
     `DONE: ${s.done.length}`, list(s.done), "",
     `NOT DONE: ${s.notDone.length}`, list(s.notDone), "",
-    `DELETED: ${s.deleted.length}`, list(s.deleted), "",
+    `ABSENT: ${s.absent.length}`, list(s.absent), "",
     `UNMARKED: ${s.unmarked.length}`, list(s.unmarked), "",
     "------------------ STATISTICS --------------------", "",
-    `Completion Percentage: ${pct(s.done.length, s.active)} (done / active entries)`,
-    `Done Percentage: ${pct(s.done.length, s.active)}`,
-    `Not Done Percentage: ${pct(s.notDone.length, s.active)}`,
-    `Deleted Entries: ${s.deleted.length}`,
-    `Unmarked Entries: ${s.unmarked.length}`, "",
+    `Done Percentage: ${pct(s.done.length, s.total)} (done / total members)`,
+    `Marked Percentage: ${pct(s.total - s.unmarked.length, s.total)} (done + not done + absent / total members)`,
+    `Not Done Percentage: ${pct(s.notDone.length, s.total)}`,
+    `Absent Percentage: ${pct(s.absent.length, s.total)}`,
+    `Unmarked Percentage: ${pct(s.unmarked.length, s.total)}`, "",
     bar, center("END OF ZCHECKLIST REPORT"), bar, "",
   ].join("\n");
 }
 
-export function downloadReport(session: Session) {
-  const now = new Date();
-  const blob = new Blob([buildReportText(session, now)], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `ZChecklist_Report_${fileStamp(now)}.txt`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+/* ---------- legacy (pre-account) browser session ---------- */
+export const LEGACY_KEY = "zchecklist_session_v1";
+export function readLegacy(): { statuses: string; total: number } | null {
+  try {
+    const raw = localStorage.getItem(LEGACY_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as { total?: number; entries?: { status: string }[] };
+    if (!p || !Array.isArray(p.entries) || typeof p.total !== "number" || p.entries.length !== p.total) return null;
+    if (p.total < 1 || p.total > MAX_MEMBERS) return null;
+    const map: Record<string, StatusCode> = { done: "d", not_done: "n", deleted: "a", unmarked: "u" };
+    return { total: p.total, statuses: p.entries.map((e) => map[e.status] ?? "u").join("") };
+  } catch {
+    return null;
+  }
 }
