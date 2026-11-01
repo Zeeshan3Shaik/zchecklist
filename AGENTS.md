@@ -9,4 +9,6 @@
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
 
-- ZChecklist is a single-route SPA (src/routes/index.tsx) with screens switched by React state; all counts/report text derive from src/lib/zchecklist.ts so UI and download never disagree. Persistence is localStorage only (no backend), per spec.
+- ZChecklist retains a single public SPA route with session-gated screens; Cloud Auth and owner-only RLS protect private records independently of screen visibility.
+- Centralize status/report calculations in zchecklist.ts, analytics in analytics.ts and Excel generation in workbook.ts so all exports use the same saved observations.
+- Serialize version-checked writes and retain owner-scoped pending drafts locally until confirmed; never report failed writes as saved or complete pending work.
