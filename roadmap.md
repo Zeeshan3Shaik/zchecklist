@@ -1,5 +1,5 @@
 # ZChecklist completion
-- [ ] Finish username-only signup and explicit login, preserving private account isolation.
+- [ ] Finish verified real-email signup, username login, recovery and profile settings, preserving private account isolation.
 - [ ] Finish date/category/count/name flow and consistent navigation.
 - [ ] Protect pending saves, retry failures, completion and restoration.
 - [ ] Add professional two-sheet Excel report and chart.
