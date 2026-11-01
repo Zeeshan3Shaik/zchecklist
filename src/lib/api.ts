@@ -40,7 +40,7 @@ export class ConflictError extends Error {
 }
 
 /** Optimistic-concurrency update: succeeds only when the stored version still matches. */
-export async function updateChecklist(id: string, version: number, patch: { statuses?: string; completed_at?: string }) {
+export async function updateChecklist(id: string, version: number, patch: { statuses?: string; completed_at?: string | null }) {
   const { data, error } = await supabase.from("checklists").update(patch).eq("id", id).eq("version", version).select(COLS).maybeSingle();
   if (error) throw error;
   if (!data) throw new ConflictError();
