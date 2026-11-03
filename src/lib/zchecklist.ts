@@ -12,6 +12,8 @@ export const CATEGORIES: { id: Category; label: string }[] = [
 export const categoryLabel = (c: Category | string) => CATEGORIES.find((x) => x.id === c)?.label ?? String(c);
 export const STATUS_LABEL: Record<StatusCode, string> = { u: "Unmarked", d: "Done", n: "Not Done", a: "Absent" };
 
+export type Labels = Record<string, string>;
+
 export interface Checklist {
   id: string;
   checklist_date: string; // YYYY-MM-DD calendar date, no timezone
@@ -23,6 +25,7 @@ export interface Checklist {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+  labels: Labels;
 }
 
 export const MAX_MEMBERS = 100;
@@ -70,6 +73,18 @@ export function validatePassword(raw: string): V<string> {
 export const usernameToEmail = (u: string) => `${normalizeUsername(u)}@users.zchecklist.app`;
 
 export const blankStatuses = (n: number) => "u".repeat(n);
+export function validateLabel(raw: string): V<string> {
+  const v = raw.trim().replace(/\s+/g, " ");
+  if (!v) return { ok: false, error: "Please enter a name." };
+  if (v.length > 60) return { ok: false, error: "Keep the name to 60 characters or fewer." };
+  return { ok: true, value: v };
+}
+export function setLabel(labels: Labels, member: number, name: string | null): Labels {
+  const next = { ...labels };
+  if (name === null) delete next[String(member)]; else next[String(member)] = name;
+  return next;
+}
+export const labelFor = (labels: Labels | undefined, member: number) => labels?.[String(member)] ?? "";
 export function setStatusAt(statuses: string, member: number, s: StatusCode): string {
   const i = member - 1;
   if (i < 0 || i >= statuses.length) return statuses;
@@ -163,7 +178,8 @@ export function fileBase(name: string, iso: string) {
   return `ZChecklist_${safe}_${iso}`;
 }
 
-const list = (a: number[]) => (a.length ? a.join(", ") : "(None)");
+const list = (a: number[], labels?: Labels) =>
+  a.length ? a.map((n) => (labels && labels[String(n)] ? `${n} (${labels[String(n)]})` : String(n))).join(", ") : "(None)";
 const center = (s: string, w = 50) => " ".repeat(Math.max(0, Math.floor((w - s.length) / 2))) + s;
 
 export function buildReportText(c: Checklist, generated: Date = new Date()): string {
@@ -180,10 +196,10 @@ export function buildReportText(c: Checklist, generated: Date = new Date()): str
     `Report Generated: ${fmtStamp(generated)}`, "",
     `TOTAL MEMBERS: ${s.total}`, "",
     "------------------ SUMMARY -----------------------", "",
-    `DONE: ${s.done.length}`, list(s.done), "",
-    `NOT DONE: ${s.notDone.length}`, list(s.notDone), "",
-    `ABSENT: ${s.absent.length}`, list(s.absent), "",
-    `UNMARKED: ${s.unmarked.length}`, list(s.unmarked), "",
+    `DONE: ${s.done.length}`, list(s.done, c.labels), "",
+    `NOT DONE: ${s.notDone.length}`, list(s.notDone, c.labels), "",
+    `ABSENT: ${s.absent.length}`, list(s.absent, c.labels), "",
+    `UNMARKED: ${s.unmarked.length}`, list(s.unmarked, c.labels), "",
     "------------------ STATISTICS --------------------", "",
     `Done Percentage: ${pct(s.done.length, s.total)} (done / total members)`,
     `Marked Percentage: ${pct(s.total - s.unmarked.length, s.total)} (done + not done + absent / total members)`,

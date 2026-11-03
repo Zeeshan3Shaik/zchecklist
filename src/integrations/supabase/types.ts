@@ -21,6 +21,7 @@ export type Database = {
           completed_at: string | null
           created_at: string
           id: string
+          labels: Json
           member_count: number
           name: string
           statuses: string
@@ -34,6 +35,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           id?: string
+          labels?: Json
           member_count: number
           name: string
           statuses: string
@@ -47,12 +49,43 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           id?: string
+          labels?: Json
           member_count?: number
           name?: string
           statuses?: string
           updated_at?: string
           user_id?: string
           version?: number
+        }
+        Relationships: []
+      }
+      frameworks: {
+        Row: {
+          created_at: string
+          id: string
+          labels: Json
+          member_count: number
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          labels?: Json
+          member_count: number
+          name: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          labels?: Json
+          member_count?: number
+          name?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

@@ -3,13 +3,14 @@ import { Button as DesignButton, type ButtonProps } from "@/components/ui/button
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { AccountAuth, ProfileScreen } from "./AccountScreens";
+import { AboutScreen, FaqScreen } from "./InfoScreens";
 import { buildWorkbook } from "@/lib/workbook";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import {
   AlertTriangle, BarChart3, Check, CheckCheck, ChevronDown, CircleDashed, Download, FileSpreadsheet,
-  History, Home as HomeIcon, UserRound, CalendarDays, BookOpen, GraduationCap, Layers, LogOut, Pencil, Plus, Trash2, UserX, X,
+  History, Home as HomeIcon, UserRound, CalendarDays, BookOpen, GraduationCap, Layers, LogOut, Pencil, Plus, Trash2, UserX, X, Info, CircleHelp, FolderOpen, Save,
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import {
@@ -17,17 +18,17 @@ import {
 } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  CATEGORIES, blankStatuses, buildReportText, categoryLabel, fileBase, formatDDMMYY, groupHistory,
+  CATEGORIES, blankStatuses, buildReportText, categoryLabel, fileBase, formatDDMMYY, groupHistory, labelFor, setLabel, validateLabel,
   longDate, monthLabel, parseDDMMYY, pct, readLegacy, setStatusAt, summarize, toISODate, validateChecklistName,
   validateCount, validateDisplayName, validatePassword, validateUsername, usernameToEmail,
   type Category, type Checklist, type StatusCode,
 } from "@/lib/zchecklist";
 import {
-  ConflictError, createChecklist, deleteChecklist, fetchProfile, getChecklist, listChecklists, updateChecklist,
+  ConflictError, createChecklist, createFramework, deleteChecklist, deleteFramework, fetchProfile, getChecklist, listChecklists, listFrameworks, updateChecklist, updateFramework, type Framework,
 } from "@/lib/api";
 import { computeAnalytics } from "@/lib/analytics";
 
-type Screen = "welcome" | "auth" | "home" | "setup" | "checklist" | "report" | "history" | "analytics" | "profile";
+type Screen = "welcome" | "auth" | "home" | "setup" | "checklist" | "report" | "history" | "analytics" | "profile" | "frameworks" | "about" | "faqs";
 type Prompt =
   | null
   | "unmarked"
@@ -114,7 +115,7 @@ const btn = "inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl 
 const btnGhost = `${btn} glass text-foreground hover:brightness-100 hover:bg-secondary`;
 const inputCls = "w-full rounded-2xl border border-glass-border bg-card px-4 py-3 text-base font-medium text-foreground outline-none transition focus:ring-4 focus:ring-ring/30";
 
-function Field({ label, error, children, htmlFor }: { label: string; error?: string | null; children: ReactNode; htmlFor?: string }) {
+function Field({ label, error, children, htmlFor }: { label: string; error?: string | null | undefined; children: ReactNode; htmlFor?: string }) {
   return (
     <div>
       <label htmlFor={htmlFor} className="mb-1.5 block text-sm font-semibold text-foreground">{label}</label>
@@ -166,6 +167,7 @@ function Home({ name, items, onNew, onHistory, onAnalytics, onImportLegacy }: {
   onHistory: () => void;
   onAnalytics: () => void;
   onImportLegacy: () => void;
+  onFrameworks: () => void;
 }) {
   const legacy = useMemo(() => readLegacy(), []);
   const [date, setDate] = useState("");
@@ -185,6 +187,10 @@ function Home({ name, items, onNew, onHistory, onAnalytics, onImportLegacy }: {
         </div>
       )}
 
+      <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+        <Button onClick={onFrameworks} className={`${btnGhost} flex-1 justify-start`}><Save className="h-4 w-4" /> Make a checklist framework</Button>
+        <Button onClick={onFrameworks} className={`${btnGhost} flex-1 justify-start`}><FolderOpen className="h-4 w-4" /> Load a checklist framework</Button>
+      </div>
       <div className="home-frame relative mt-8 grid gap-4 pb-8 sm:grid-cols-3">
         <Button onClick={() => { if (date) onNew(date); else toast.error("Select a date first."); }} className="glass anim-rise group flex flex-col items-start gap-6 rounded-[28px] px-6 py-9 text-left transition hover:-translate-y-1 hover:shadow-lg" style={{ animationDelay: "80ms" }}>
           <span className="btn-blue flex h-12 w-12 items-center justify-center rounded-2xl"><Plus className="h-6 w-6" strokeWidth={2.5} /></span>
@@ -216,37 +222,45 @@ function Home({ name, items, onNew, onHistory, onAnalytics, onImportLegacy }: {
 function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Date | undefined>();
-  return <Popover open={open} onOpenChange={setOpen}><PopoverTrigger asChild><Button className={`${inputCls} justify-between`} aria-label="Choose date"><span>{value ? formatDDMMYY(value) : "DD/MM/YY"}</span><CalendarDays className="h-5 w-5" /></Button></PopoverTrigger><PopoverContent className="glass w-auto rounded-2xl p-3"><Calendar mode="single" selected={selected} onSelect={setSelected} defaultMonth={value ? new Date(`${value}T12:00:00`) : undefined} /><Button disabled={!selected} className={`${btn} btn-blue w-full`} onClick={() => { if (!selected) return; onChange(toISODate(selected.getFullYear(), selected.getMonth() + 1, selected.getDate())); setOpen(false); }}>Done</Button></PopoverContent></Popover>;
+  return <Popover open={open} onOpenChange={setOpen}><PopoverTrigger asChild><Button className={`${inputCls} justify-between`} aria-label="Choose date"><span>{value ? formatDDMMYY(value) : "DD/MM/YY"}</span><CalendarDays className="h-5 w-5" /></Button></PopoverTrigger><PopoverContent className="glass w-auto rounded-2xl p-3"><Calendar mode="single" selected={selected} onSelect={setSelected} defaultMonth={value ? new Date(`${value}T12:00:00`) : new Date()} /><Button disabled={!selected} className={`${btn} btn-blue w-full`} onClick={() => { if (!selected) return; onChange(toISODate(selected.getFullYear(), selected.getMonth() + 1, selected.getDate())); setOpen(false); }}>Done</Button></PopoverContent></Popover>;
 }
 
-function Setup({ date, onCreate, onCancel }: { date: string; onCreate: (input: { name: string; date: string; category: Category; count: number }) => Promise<void>; onCancel: () => void }) {
+function Setup({ date, framework, onCreate, onCancel }: { date: string; framework: Framework | null; onCreate: (input: { name: string; date: string; category: Category; count: number; labels: Record<string, string> }) => Promise<void>; onCancel: () => void }) {
   const [name, setName] = useState(""); const [category, setCategory] = useState<Category | null>(null);
   const [count, setCount] = useState(""); const [step, setStep] = useState<"category" | "count" | "name">("category");
   const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
   const icons = [BookOpen, GraduationCap, CalendarDays, Layers];
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); if (busy) return;
-    const c = validateCount(count); if (!c.ok) return setError(c.error);
-    if (step === "count") { setError(""); return setStep("name"); }
+    if (step === "count") {
+      if (fw) { setError(""); setStep("name"); return; }
+      const c = validateCount(count); if (!c.ok) return setError(c.error);
+      setError(""); setStep("name"); return;
+    }
     const n = validateChecklistName(name); if (!n.ok) return setError(n.error);
-    if (!category) return; setBusy(true);
-    try { await onCreate({ name: n.value, date, category, count: c.value }); } finally { setBusy(false); }
+    if (!category) return;
+    const c = fw ? { ok: true as const, value: fw.member_count } : validateCount(count);
+    if (!c.ok) return setError(c.error);
+    setBusy(true);
+    try { await onCreate({ name: n.value, date, category, count: c.value, labels: fw?.labels ?? {} }); } finally { setBusy(false); }
   };
   return <div className="mx-auto w-full max-w-2xl px-4 py-8"><h1 className="text-3xl font-extrabold">{step === "category" ? "Select a category" : step === "count" ? "Enter the total number of members to be checked." : "Name your checklist"}</h1><p className="mt-3 text-muted-foreground">{formatDDMMYY(date)}{category ? ` · ${categoryLabel(category)}` : ""}</p>
-    {step === "category" ? <div className="mt-8 grid grid-cols-2 gap-4">{CATEGORIES.map((c, i) => { const Icon = icons[i] ?? Layers; return <Button key={c.id} onClick={() => { setCategory(c.id); setStep("count"); }} className="glass flex min-h-36 flex-col gap-4 rounded-2xl p-5 text-lg font-bold"><Icon className="h-7 w-7 text-primary" />{c.label}</Button>; })}</div> : <form onSubmit={submit} className="mt-8 space-y-4"><Field label={step === "count" ? "Number of members · Maximum 100" : "Checklist name"} error={error}>{step === "count" ? <input aria-label="Number of members" inputMode="numeric" value={count} onChange={(e) => setCount(e.target.value)} className={inputCls} placeholder="1–100" /> : <input aria-label="Checklist name" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} className={inputCls} placeholder="Monday Maths Homework" />}</Field><Button type="submit" disabled={busy} className={`${btn} btn-blue`}>{busy ? "Creating…" : step === "count" ? "Continue" : "Create Checklist"}</Button></form>}
-    <Button className={`${btnGhost} mt-5`} onClick={() => { setError(""); if (step === "name") setStep("count"); else if (step === "count") setStep("category"); else onCancel(); }}>Back</Button>
+    {step === "category" ? <div className="mt-8 grid grid-cols-2 gap-4">{CATEGORIES.map((c, i) => { const Icon = icons[i] ?? Layers; return <Button key={c.id} onClick={() => { setCategory(c.id); setStep(fw ? "name" : "count"); }} className="glass flex min-h-36 flex-col gap-4 rounded-2xl p-5 text-lg font-bold"><Icon className="h-7 w-7 text-primary" />{c.label}</Button>; })}</div> : <form onSubmit={submit} className="mt-8 space-y-4"><Field label={step === "count" ? "Number of members · Maximum 100" : "Checklist name"} error={error}>{step === "count" ? <input aria-label="Number of members" inputMode="numeric" value={count} onChange={(e) => setCount(e.target.value)} className={inputCls} placeholder="1–100" /> : <input aria-label="Checklist name" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} className={inputCls} placeholder="Monday Maths Homework" />}</Field><Button type="submit" disabled={busy} className={`${btn} btn-blue`}>{busy ? "Creating…" : step === "count" ? "Continue" : "Create Checklist"}</Button></form>}
+    <Button className={`${btnGhost} mt-5`} onClick={() => { setError(""); if (step === "name") setStep(fw ? "category" : "count"); else if (step === "count") setStep("category"); else onCancel(); }}>Back</Button>
   </div>;
 }
 
 /* ---------------- Checklist ---------------- */
-function ChecklistScreen({ checklist, saving, saveError, onRetry, onMark, onComplete }: {
+function ChecklistScreen({ checklist, saving, saveError, onRetry, onMark, onLabel, onComplete }: {
   checklist: Checklist;
   saving: boolean;
   saveError: boolean;
   onRetry: () => void;
   onMark: (member: number, s: StatusCode) => void;
+  onLabel: (member: number, name: string | null) => void;
   onComplete: () => void;
 }) {
+  const [labelDraft, setLabelDraft] = useState("");
   const [menu, setMenu] = useState<{ n: number; x: number; y: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const sum = useMemo(() => summarize(checklist.statuses), [checklist.statuses]);
@@ -273,6 +287,7 @@ function ChecklistScreen({ checklist, saving, saveError, onRetry, onMark, onComp
     x = Math.max(pad, Math.min(x, window.innerWidth - W - pad));
     let y = r.bottom + 8;
     if (y + H > window.innerHeight - pad) y = Math.max(pad, r.top - H - 8);
+    setLabelDraft(labelFor(checklist.labels, n));
     setMenu({ n, x, y });
   };
   const pick = (s: StatusCode) => {
@@ -316,6 +331,7 @@ function ChecklistScreen({ checklist, saving, saveError, onRetry, onMark, onComp
                 } ${menu?.n === n ? "ring-4 ring-ring/40" : ""}`}
               >
                 <span className="text-3xl font-extrabold tracking-normal">{n}</span>
+                {labelFor(checklist.labels, n) && <span className="absolute bottom-2 left-2 right-2 truncate text-center text-[11px] font-semibold opacity-90">{labelFor(checklist.labels, n)}</span>}
                 {st === "d" && <Check className="absolute right-3 top-3 h-5 w-5" strokeWidth={3} aria-hidden />}
                 {st === "n" && <X className="absolute right-3 top-3 h-5 w-5" strokeWidth={3} aria-hidden />}
                 {st === "a" && <UserX className="absolute right-3 top-3 h-5 w-5" aria-hidden />}
@@ -345,6 +361,30 @@ function ChecklistScreen({ checklist, saving, saveError, onRetry, onMark, onComp
             <Button role="menuitem" onClick={() => pick("a")} className={`${btn} btn-ink justify-start`}>
               <UserX className="h-4 w-4" /> Absent
             </Button>
+            <div className="mt-1 rounded-2xl bg-primary/10 p-2">
+              <p className="px-1 pb-1 text-xs font-semibold text-primary">Add Label</p>
+              <div className="flex gap-1.5">
+                <input
+                  aria-label={`Name for member ${menu.n}`}
+                  value={labelDraft}
+                  onChange={(e) => setLabelDraft(e.target.value)}
+                  placeholder="Member name"
+                  className="min-w-0 flex-1 rounded-xl border border-glass-border bg-card px-2 py-1.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring/40"
+                />
+                <Button
+                  role="menuitem"
+                  className={`${btn} btn-blue px-3 py-1.5 text-xs`}
+                  onClick={() => {
+                    const v = validateLabel(labelDraft);
+                    if (!v.ok) { toast.error(v.error); return; }
+                    const n = menu.n; setMenu(null); onLabel(n, v.value);
+                  }}
+                >Save</Button>
+              </div>
+              {labelFor(checklist.labels, menu.n) && (
+                <Button role="menuitem" variant="link" className="mt-1 h-auto px-1 text-xs" onClick={() => { const n = menu.n; setMenu(null); onLabel(n, null); }}>Remove label</Button>
+              )}
+            </div>
           </div>
         </>
       )}
@@ -367,7 +407,7 @@ const toneCls: Record<Tone, { box: string; ink: string }> = {
   amber: { box: "bg-amber-soft", ink: "text-amber-ink" },
 };
 
-function Section({ title, nums, tone }: { title: string; nums: number[]; tone: Tone }) {
+function Section({ title, nums, tone, labels }: { title: string; nums: number[]; tone: Tone; labels?: Record<string, string> }) {
   const [open, setOpen] = useState(false);
   const id = `sec-${title.replace(/\s/g, "")}`;
   return (
@@ -397,7 +437,7 @@ function Section({ title, nums, tone }: { title: string; nums: number[]; tone: T
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 {nums.map((n) => (
-                  <span key={n} className={`rounded-lg px-2.5 py-1 text-sm font-semibold ${toneCls[tone].box} ${toneCls[tone].ink}`}>{n}</span>
+                  <span key={n} className={`rounded-lg px-2.5 py-1 text-sm font-semibold ${toneCls[tone].box} ${toneCls[tone].ink}`}>{n}{labels?.[String(n)] ? ` · ${labels[String(n)]}` : ""}</span>
                 ))}
               </div>
             )}
@@ -456,10 +496,10 @@ function Report({ checklist, onEdit, onHome }: { checklist: Checklist; onEdit: (
       </div>
 
       <div className="anim-rise mt-6 flex flex-col gap-3" style={{ animationDelay: "450ms" }}>
-        <Section title="Done" nums={s.done} tone="done" />
-        <Section title="Not Done" nums={s.notDone} tone="notdone" />
-        <Section title="Absent" nums={s.absent} tone="ink" />
-        <Section title="Unmarked" nums={s.unmarked} tone="amber" />
+        <Section title="Done" nums={s.done} tone="done" labels={checklist.labels} />
+        <Section title="Not Done" nums={s.notDone} tone="notdone" labels={checklist.labels} />
+        <Section title="Absent" nums={s.absent} tone="ink" labels={checklist.labels} />
+        <Section title="Unmarked" nums={s.unmarked} tone="amber" labels={checklist.labels} />
       </div>
 
       <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
@@ -676,10 +716,56 @@ function AnalyticsScreen({ items, onBack }: { items: Checklist[]; onBack: () => 
   );
 }
 
+/* ---------------- Frameworks ---------------- */
+function FrameworksScreen({ onBack, onUse }: { onBack: () => void; onUse: (f: Framework) => void }) {
+  const [items, setItems] = useState<Framework[] | null>(null);
+  const [name, setName] = useState("");
+  const [count, setCount] = useState("");
+  const [busy, setBusy] = useState(false);
+  const load = () => listFrameworks().then(setItems).catch(() => toast.error("Couldn't load your frameworks."));
+  useEffect(() => { load(); }, []);
+  const make = async (e: React.FormEvent) => {
+    e.preventDefault(); if (busy) return;
+    const n = validateChecklistName(name); if (!n.ok) return toast.error(n.error);
+    const c = validateCount(count); if (!c.ok) return toast.error(c.error);
+    setBusy(true);
+    try { await createFramework({ name: n.value, member_count: c.value, labels: {} }); setName(""); setCount(""); load(); toast.success("Framework saved."); }
+    catch { toast.error("Couldn't save the framework."); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="anim-rise mx-auto w-full max-w-3xl px-4 pb-20 sm:px-6">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-4xl font-extrabold tracking-normal text-foreground sm:text-5xl">Frameworks</h1>
+        <Button onClick={onBack} className={btnGhost}>Back Home</Button>
+      </div>
+      <form onSubmit={make} className="glass mt-6 flex flex-col gap-3 rounded-[24px] p-5 sm:flex-row sm:items-end">
+        <div className="flex-1"><Field label="Framework name"><input aria-label="Framework name" value={name} onChange={(e) => setName(e.target.value)} className={inputCls} placeholder="e.g. Class 8A roster" /></Field></div>
+        <div className="w-full sm:w-36"><Field label="Members"><input aria-label="Framework members" inputMode="numeric" value={count} onChange={(e) => setCount(e.target.value)} className={inputCls} placeholder="1–100" /></Field></div>
+        <Button type="submit" disabled={busy} className={`${btn} btn-blue`}><Save className="h-4 w-4" /> Make a checklist framework</Button>
+      </form>
+      <div className="mt-6 flex flex-col gap-2">
+        {items === null ? <p className="text-muted-foreground">Loading…</p> : items.length === 0 ? (
+          <div className="glass rounded-[24px] p-8 text-center text-muted-foreground">No frameworks yet. Make one above, then load it whenever you start a checklist.</div>
+        ) : items.map((f) => (
+          <div key={f.id} className="glass flex flex-col gap-3 rounded-[22px] p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div><p className="text-lg font-bold text-foreground">{f.name}</p><p className="text-sm text-muted-foreground">{f.member_count} members{Object.keys(f.labels).length ? ` · ${Object.keys(f.labels).length} named` : ""}</p></div>
+            <div className="flex shrink-0 gap-2">
+              <Button onClick={() => onUse(f)} className={`${btn} btn-blue px-4`}><FolderOpen className="h-4 w-4" /> Load a checklist framework</Button>
+              <Button onClick={async () => { try { await deleteFramework(f.id); load(); } catch { toast.error("Couldn't delete it."); } }} className={`${btn} btn-red px-4`} aria-label={`Delete ${f.name}`}><Trash2 className="h-4 w-4" /></Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- App ---------------- */
 export function ZChecklistApp() {
   const queryClient = useQueryClient();
   const [draftDate, setDraftDate] = useState("");
+  const [draftFramework, setDraftFramework] = useState<Framework | null>(null);
   const [saveError, setSaveError] = useState(false);
   const failedRef = useRef(false);
   const userRef = useRef<User | null>(null);
@@ -777,7 +863,7 @@ export function ZChecklistApp() {
     const draft = currentRef.current;
     if (!draft) return;
     const fresh = await getChecklist(draft.id).catch(() => null);
-    if (!fresh) return toast.error("Still unable to connect.");
+    if (!fresh) { toast.error("Still unable to connect."); return; }
     if (fresh.version !== confirmedRef.current?.version) {
       toast.error("The cloud copy has changed. Your local draft remains protected. Reload to use the cloud copy rather than overwrite another device.");
       return;
@@ -787,8 +873,9 @@ export function ZChecklistApp() {
 
   const leave = async (destination: Screen) => {
     await saveChain.current;
-    if (failedRef.current) return toast.error("Retry saving before leaving; your work has not been discarded.");
+    if (failedRef.current) { toast.error("Retry saving before leaving; your work has not been discarded."); return; }
     setScreen(destination);
+    return;
   };
 
   const mark = useCallback((member: number, s: StatusCode) => {
@@ -800,8 +887,29 @@ export function ZChecklistApp() {
     queueSave(next);
   }, [queueSave]);
 
+  const setMemberLabel = useCallback((member: number, name: string | null) => {
+    const cur = currentRef.current;
+    if (!cur) return;
+    const next = { ...cur, labels: setLabel(cur.labels ?? {}, member, name) };
+    currentRef.current = next;
+    setCurrent(next);
+    const owner = userRef.current?.id;
+    if (owner) try { localStorage.setItem(`zchecklist_draft_${owner}`, JSON.stringify(next)); } catch { /* in-memory draft remains */ }
+    setSaving(true);
+    saveChain.current = saveChain.current.then(async () => {
+      const base = confirmedRef.current;
+      if (!base || base.id !== next.id || failedRef.current) return;
+      try {
+        const row = await updateChecklist(next.id, base.version, { labels: next.labels });
+        confirmedRef.current = row; replaceItem(row);
+        const latest = currentRef.current;
+        if (latest?.id === row.id) { const m = { ...latest, version: row.version, updated_at: row.updated_at }; currentRef.current = m; setCurrent(m); }
+      } catch { failedRef.current = true; setSaveError(true); toast.error("Save failed. Your work is retained. Retry before leaving."); }
+    }).finally(() => setSaving(false));
+  }, [replaceItem]);
+
   /* ----- actions ----- */
-  const create = async (input: { name: string; date: string; category: Category; count: number }) => {
+  const create = async (input: { name: string; date: string; category: Category; count: number; labels?: Record<string, string> }) => {
     try {
       const row = await createChecklist({
         checklist_date: input.date,
@@ -809,6 +917,7 @@ export function ZChecklistApp() {
         name: input.name,
         member_count: input.count,
         statuses: blankStatuses(input.count),
+        labels: input.labels ?? {},
       });
       failedRef.current = false; setSaveError(false);
       confirmedRef.current = row;
@@ -824,7 +933,7 @@ export function ZChecklistApp() {
   const complete = async () => {
     setPrompt(null);
     await saveChain.current;
-    if (failedRef.current) return toast.error("Please retry saving before completing.");
+    if (failedRef.current) { toast.error("Please retry saving before completing."); return; }
     const cur = confirmedRef.current;
     if (!cur) return;
     setSaving(true);
@@ -899,7 +1008,7 @@ export function ZChecklistApp() {
   const signOut = async () => {
     setPrompt(null);
     await saveChain.current;
-    if (failedRef.current) return toast.error("Save your pending changes before signing out.");
+    if (failedRef.current) { toast.error("Save your pending changes before signing out."); return; }
     await queryClient.cancelQueries(); queryClient.clear();
     await supabase.auth.signOut();
     setItems([]); setCurrent(null); confirmedRef.current = null; currentRef.current = null;
@@ -928,15 +1037,31 @@ export function ZChecklistApp() {
 
       <div className="relative z-10 flex min-h-screen flex-col">
         <header className="sticky top-0 z-30 flex h-[88px] items-center justify-between gap-3 px-4 sm:px-8">
-          <div className="flex min-w-0 items-center gap-2"><Brand onClick={() => void leave(user ? "home" : "auth")} />{user && <Button onClick={() => void leave("home")} className={`${btnGhost} px-3`} aria-label="Home"><HomeIcon className="h-4 w-4" /></Button>}</div>
+          <div className="flex min-w-0 items-center gap-2"><Brand onClick={() => void leave(user ? "home" : "auth")} /></div>
           {user && <div className="flex items-center gap-2">
-            {screen === "home" && <Button onClick={() => void leave("history")} className={`${btnGhost} px-3`} aria-label="History"><History className="h-4 w-4" /><span className="hidden sm:inline">History</span></Button>}
             {screen === "history" && <Button onClick={() => setScreen("analytics")} className={`${btn} btn-blue px-3`} aria-label="Analytics"><BarChart3 className="h-4 w-4" /><span className="hidden sm:inline">Analytics</span></Button>}
-            {screen === "checklist" ? <><Button onClick={() => void leave("welcome")} className={`${btn} btn-red px-3`} aria-label="Exit"><LogOut className="h-4 w-4" /><span className="hidden sm:inline">Exit</span></Button><Button onClick={onCompleteClick} disabled={saving || saveError} className={`${btn} btn-blue px-3`} aria-label="Checklist Complete"><CheckCheck className="h-4 w-4" /><span className="hidden sm:inline">Checklist Complete</span></Button></> : <><Button onClick={() => void leave("profile")} className={`${btnGhost} px-3`} aria-label="Profile"><UserRound className="h-4 w-4" /><span className="hidden sm:inline">Profile</span></Button><Button onClick={() => setPrompt("signOut")} className={`${btnGhost} px-3`} aria-label="Sign Out"><LogOut className="h-4 w-4" /><span className="hidden sm:inline">Sign Out</span></Button></>}
+            {screen === "checklist" ? <><Button onClick={() => void leave("welcome")} className={`${btn} btn-red px-3`} aria-label="Exit"><LogOut className="h-4 w-4" /><span className="hidden sm:inline">Exit</span></Button><Button onClick={onCompleteClick} disabled={saving || saveError} className={`${btn} btn-blue px-3`} aria-label="Checklist Complete"><CheckCheck className="h-4 w-4" /><span className="hidden sm:inline">Checklist Complete</span></Button></> : <Button onClick={() => void leave("profile")} className={`${btnGhost} px-3`} aria-label="Profile"><UserRound className="h-4 w-4" /><span className="hidden sm:inline">Profile</span></Button>}
           </div>}
         </header>
 
-        <main className="flex-1">
+        <div className="flex flex-1">
+        {user && (
+          <nav aria-label="Main" className="glass sticky top-[88px] z-20 hidden h-[calc(100vh-88px)] w-56 shrink-0 flex-col gap-1 rounded-none border-y-0 border-l-0 p-4 sm:flex">
+            {([["home", "Home", HomeIcon], ["about", "About", Info], ["faqs", "FAQs", CircleHelp]] as const).map(([sc, label, Icon]) => (
+              <Button key={sc} onClick={() => void leave(sc)} aria-current={screen === sc ? "page" : undefined} className={`${btnGhost} justify-start ${screen === sc ? "bg-secondary" : ""}`}><Icon className="h-4 w-4" /> {label}</Button>
+            ))}
+            <div className="mt-auto"><Button onClick={() => setPrompt("signOut")} className={`${btnGhost} w-full justify-start`}><LogOut className="h-4 w-4" /> Sign Out</Button></div>
+          </nav>
+        )}
+        {user && (
+          <nav aria-label="Main" className="glass fixed bottom-3 left-1/2 z-40 flex -translate-x-1/2 gap-1 rounded-full p-1.5 sm:hidden">
+            {([["home", "Home", HomeIcon], ["about", "About", Info], ["faqs", "FAQs", CircleHelp]] as const).map(([sc, label, Icon]) => (
+              <Button key={sc} onClick={() => void leave(sc)} aria-label={label} aria-current={screen === sc ? "page" : undefined} className={`${btnGhost} rounded-full px-3`}><Icon className="h-4 w-4" /></Button>
+            ))}
+            <Button onClick={() => setPrompt("signOut")} aria-label="Sign Out" className={`${btnGhost} rounded-full px-3`}><LogOut className="h-4 w-4" /></Button>
+          </nav>
+        )}
+        <main className="min-w-0 flex-1">
           {!booted ? (
             <div className="flex min-h-[calc(100vh-88px)] items-center justify-center">
               <p className="animate-pulse text-sm font-medium text-muted-foreground">Loading…</p>
@@ -953,11 +1078,12 @@ export function ZChecklistApp() {
                   onHistory={() => setScreen("history")}
                   onAnalytics={() => setScreen("analytics")}
                   onImportLegacy={importLegacy}
+                  onFrameworks={() => setScreen("frameworks")}
                 />
               )}
-              {screen === "setup" && <Setup date={draftDate} onCreate={create} onCancel={() => setScreen("home")} />}
+              {screen === "setup" && <Setup date={draftDate} framework={draftFramework} onCreate={create} onCancel={() => { setDraftFramework(null); setScreen("home"); }} />}
               {screen === "checklist" && current && (
-                <ChecklistScreen checklist={current} saving={saving} saveError={saveError} onRetry={retrySave} onMark={mark} onComplete={onCompleteClick} />
+                <ChecklistScreen checklist={current} saving={saving} saveError={saveError} onRetry={retrySave} onMark={mark} onLabel={setMemberLabel} onComplete={onCompleteClick} />
               )}
               {screen === "report" && current && (
                 <Report checklist={current} onEdit={editFromReport} onHome={() => setScreen("home")} />
@@ -971,6 +1097,9 @@ export function ZChecklistApp() {
                   onBack={() => setScreen("home")}
                 />
               )}
+              {screen === "frameworks" && <FrameworksScreen onBack={() => setScreen("home")} onUse={(f) => { if (!draftDate) { toast.error("Select a date on Home first."); setScreen("home"); return; } setDraftFramework(f); setScreen("setup"); }} />}
+              {screen === "about" && <AboutScreen />}
+              {screen === "faqs" && <FaqScreen />}
               {screen === "profile" && user && <ProfileScreen user={user} onSaved={() => { fetchProfile(user.id).then((p) => setProfileName(p?.name ?? "there")); }} />}
               {screen === "analytics" && <AnalyticsScreen items={items} onBack={() => setScreen("history")} />}
             </div>
