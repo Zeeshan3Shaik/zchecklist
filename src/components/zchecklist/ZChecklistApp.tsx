@@ -3,6 +3,7 @@ import { Button as DesignButton, type ButtonProps } from "@/components/ui/button
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { AccountAuth, ProfileScreen } from "./AccountScreens";
+import { AboutScreen, FaqScreen } from "./InfoScreens";
 import { buildWorkbook } from "@/lib/workbook";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -17,17 +18,17 @@ import {
 } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  CATEGORIES, blankStatuses, buildReportText, categoryLabel, fileBase, formatDDMMYY, groupHistory,
+  CATEGORIES, blankStatuses, buildReportText, categoryLabel, fileBase, formatDDMMYY, groupHistory, labelFor, setLabel, validateLabel,
   longDate, monthLabel, parseDDMMYY, pct, readLegacy, setStatusAt, summarize, toISODate, validateChecklistName,
   validateCount, validateDisplayName, validatePassword, validateUsername, usernameToEmail,
   type Category, type Checklist, type StatusCode,
 } from "@/lib/zchecklist";
 import {
-  ConflictError, createChecklist, deleteChecklist, fetchProfile, getChecklist, listChecklists, updateChecklist,
+  ConflictError, createChecklist, createFramework, deleteChecklist, deleteFramework, fetchProfile, getChecklist, listChecklists, listFrameworks, updateChecklist, updateFramework, type Framework,
 } from "@/lib/api";
 import { computeAnalytics } from "@/lib/analytics";
 
-type Screen = "welcome" | "auth" | "home" | "setup" | "checklist" | "report" | "history" | "analytics" | "profile";
+type Screen = "welcome" | "auth" | "home" | "setup" | "checklist" | "report" | "history" | "analytics" | "profile" | "frameworks" | "about" | "faqs";
 type Prompt =
   | null
   | "unmarked"
@@ -219,34 +220,42 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
   return <Popover open={open} onOpenChange={setOpen}><PopoverTrigger asChild><Button className={`${inputCls} justify-between`} aria-label="Choose date"><span>{value ? formatDDMMYY(value) : "DD/MM/YY"}</span><CalendarDays className="h-5 w-5" /></Button></PopoverTrigger><PopoverContent className="glass w-auto rounded-2xl p-3"><Calendar mode="single" selected={selected} onSelect={setSelected} defaultMonth={value ? new Date(`${value}T12:00:00`) : new Date()} /><Button disabled={!selected} className={`${btn} btn-blue w-full`} onClick={() => { if (!selected) return; onChange(toISODate(selected.getFullYear(), selected.getMonth() + 1, selected.getDate())); setOpen(false); }}>Done</Button></PopoverContent></Popover>;
 }
 
-function Setup({ date, onCreate, onCancel }: { date: string; onCreate: (input: { name: string; date: string; category: Category; count: number }) => Promise<void>; onCancel: () => void }) {
+function Setup({ date, framework, onCreate, onCancel }: { date: string; framework: Framework | null; onCreate: (input: { name: string; date: string; category: Category; count: number; labels: Record<string, string> }) => Promise<void>; onCancel: () => void }) {
   const [name, setName] = useState(""); const [category, setCategory] = useState<Category | null>(null);
   const [count, setCount] = useState(""); const [step, setStep] = useState<"category" | "count" | "name">("category");
   const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
   const icons = [BookOpen, GraduationCap, CalendarDays, Layers];
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); if (busy) return;
-    const c = validateCount(count); if (!c.ok) return setError(c.error);
-    if (step === "count") { setError(""); return setStep("name"); }
+    if (step === "count") {
+      if (fw) { setError(""); setStep("name"); return; }
+      const c = validateCount(count); if (!c.ok) return setError(c.error);
+      setError(""); setStep("name"); return;
+    }
     const n = validateChecklistName(name); if (!n.ok) return setError(n.error);
-    if (!category) return; setBusy(true);
-    try { await onCreate({ name: n.value, date, category, count: c.value }); } finally { setBusy(false); }
+    if (!category) return;
+    const c = fw ? { ok: true as const, value: fw.member_count } : validateCount(count);
+    if (!c.ok) return setError(c.error);
+    setBusy(true);
+    try { await onCreate({ name: n.value, date, category, count: c.value, labels: fw?.labels ?? {} }); } finally { setBusy(false); }
   };
   return <div className="mx-auto w-full max-w-2xl px-4 py-8"><h1 className="text-3xl font-extrabold">{step === "category" ? "Select a category" : step === "count" ? "Enter the total number of members to be checked." : "Name your checklist"}</h1><p className="mt-3 text-muted-foreground">{formatDDMMYY(date)}{category ? ` · ${categoryLabel(category)}` : ""}</p>
-    {step === "category" ? <div className="mt-8 grid grid-cols-2 gap-4">{CATEGORIES.map((c, i) => { const Icon = icons[i] ?? Layers; return <Button key={c.id} onClick={() => { setCategory(c.id); setStep("count"); }} className="glass flex min-h-36 flex-col gap-4 rounded-2xl p-5 text-lg font-bold"><Icon className="h-7 w-7 text-primary" />{c.label}</Button>; })}</div> : <form onSubmit={submit} className="mt-8 space-y-4"><Field label={step === "count" ? "Number of members · Maximum 100" : "Checklist name"} error={error}>{step === "count" ? <input aria-label="Number of members" inputMode="numeric" value={count} onChange={(e) => setCount(e.target.value)} className={inputCls} placeholder="1–100" /> : <input aria-label="Checklist name" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} className={inputCls} placeholder="Monday Maths Homework" />}</Field><Button type="submit" disabled={busy} className={`${btn} btn-blue`}>{busy ? "Creating…" : step === "count" ? "Continue" : "Create Checklist"}</Button></form>}
-    <Button className={`${btnGhost} mt-5`} onClick={() => { setError(""); if (step === "name") setStep("count"); else if (step === "count") setStep("category"); else onCancel(); }}>Back</Button>
+    {step === "category" ? <div className="mt-8 grid grid-cols-2 gap-4">{CATEGORIES.map((c, i) => { const Icon = icons[i] ?? Layers; return <Button key={c.id} onClick={() => { setCategory(c.id); setStep(fw ? "name" : "count"); }} className="glass flex min-h-36 flex-col gap-4 rounded-2xl p-5 text-lg font-bold"><Icon className="h-7 w-7 text-primary" />{c.label}</Button>; })}</div> : <form onSubmit={submit} className="mt-8 space-y-4"><Field label={step === "count" ? "Number of members · Maximum 100" : "Checklist name"} error={error}>{step === "count" ? <input aria-label="Number of members" inputMode="numeric" value={count} onChange={(e) => setCount(e.target.value)} className={inputCls} placeholder="1–100" /> : <input aria-label="Checklist name" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} className={inputCls} placeholder="Monday Maths Homework" />}</Field><Button type="submit" disabled={busy} className={`${btn} btn-blue`}>{busy ? "Creating…" : step === "count" ? "Continue" : "Create Checklist"}</Button></form>}
+    <Button className={`${btnGhost} mt-5`} onClick={() => { setError(""); if (step === "name") setStep(fw ? "category" : "count"); else if (step === "count") setStep("category"); else onCancel(); }}>Back</Button>
   </div>;
 }
 
 /* ---------------- Checklist ---------------- */
-function ChecklistScreen({ checklist, saving, saveError, onRetry, onMark, onComplete }: {
+function ChecklistScreen({ checklist, saving, saveError, onRetry, onMark, onLabel, onComplete }: {
   checklist: Checklist;
   saving: boolean;
   saveError: boolean;
   onRetry: () => void;
   onMark: (member: number, s: StatusCode) => void;
+  onLabel: (member: number, name: string | null) => void;
   onComplete: () => void;
 }) {
+  const [labelDraft, setLabelDraft] = useState("");
   const [menu, setMenu] = useState<{ n: number; x: number; y: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const sum = useMemo(() => summarize(checklist.statuses), [checklist.statuses]);
@@ -273,6 +282,7 @@ function ChecklistScreen({ checklist, saving, saveError, onRetry, onMark, onComp
     x = Math.max(pad, Math.min(x, window.innerWidth - W - pad));
     let y = r.bottom + 8;
     if (y + H > window.innerHeight - pad) y = Math.max(pad, r.top - H - 8);
+    setLabelDraft(labelFor(checklist.labels, n));
     setMenu({ n, x, y });
   };
   const pick = (s: StatusCode) => {
@@ -316,6 +326,7 @@ function ChecklistScreen({ checklist, saving, saveError, onRetry, onMark, onComp
                 } ${menu?.n === n ? "ring-4 ring-ring/40" : ""}`}
               >
                 <span className="text-3xl font-extrabold tracking-normal">{n}</span>
+                {labelFor(checklist.labels, n) && <span className="absolute bottom-2 left-2 right-2 truncate text-center text-[11px] font-semibold opacity-90">{labelFor(checklist.labels, n)}</span>}
                 {st === "d" && <Check className="absolute right-3 top-3 h-5 w-5" strokeWidth={3} aria-hidden />}
                 {st === "n" && <X className="absolute right-3 top-3 h-5 w-5" strokeWidth={3} aria-hidden />}
                 {st === "a" && <UserX className="absolute right-3 top-3 h-5 w-5" aria-hidden />}
@@ -345,6 +356,30 @@ function ChecklistScreen({ checklist, saving, saveError, onRetry, onMark, onComp
             <Button role="menuitem" onClick={() => pick("a")} className={`${btn} btn-ink justify-start`}>
               <UserX className="h-4 w-4" /> Absent
             </Button>
+            <div className="mt-1 rounded-2xl bg-primary/10 p-2">
+              <p className="px-1 pb-1 text-xs font-semibold text-primary">Add Label</p>
+              <div className="flex gap-1.5">
+                <input
+                  aria-label={`Name for member ${menu.n}`}
+                  value={labelDraft}
+                  onChange={(e) => setLabelDraft(e.target.value)}
+                  placeholder="Member name"
+                  className="min-w-0 flex-1 rounded-xl border border-glass-border bg-card px-2 py-1.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring/40"
+                />
+                <Button
+                  role="menuitem"
+                  className={`${btn} btn-blue px-3 py-1.5 text-xs`}
+                  onClick={() => {
+                    const v = validateLabel(labelDraft);
+                    if (!v.ok) { toast.error(v.error); return; }
+                    const n = menu.n; setMenu(null); onLabel(n, v.value);
+                  }}
+                >Save</Button>
+              </div>
+              {labelFor(checklist.labels, menu.n) && (
+                <Button role="menuitem" variant="link" className="mt-1 h-auto px-1 text-xs" onClick={() => { const n = menu.n; setMenu(null); onLabel(n, null); }}>Remove label</Button>
+              )}
+            </div>
           </div>
         </>
       )}
@@ -367,7 +402,7 @@ const toneCls: Record<Tone, { box: string; ink: string }> = {
   amber: { box: "bg-amber-soft", ink: "text-amber-ink" },
 };
 
-function Section({ title, nums, tone }: { title: string; nums: number[]; tone: Tone }) {
+function Section({ title, nums, tone, labels }: { title: string; nums: number[]; tone: Tone; labels?: Record<string, string> }) {
   const [open, setOpen] = useState(false);
   const id = `sec-${title.replace(/\s/g, "")}`;
   return (
@@ -397,7 +432,7 @@ function Section({ title, nums, tone }: { title: string; nums: number[]; tone: T
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 {nums.map((n) => (
-                  <span key={n} className={`rounded-lg px-2.5 py-1 text-sm font-semibold ${toneCls[tone].box} ${toneCls[tone].ink}`}>{n}</span>
+                  <span key={n} className={`rounded-lg px-2.5 py-1 text-sm font-semibold ${toneCls[tone].box} ${toneCls[tone].ink}`}>{n}{labels?.[String(n)] ? ` · ${labels[String(n)]}` : ""}</span>
                 ))}
               </div>
             )}
@@ -456,10 +491,10 @@ function Report({ checklist, onEdit, onHome }: { checklist: Checklist; onEdit: (
       </div>
 
       <div className="anim-rise mt-6 flex flex-col gap-3" style={{ animationDelay: "450ms" }}>
-        <Section title="Done" nums={s.done} tone="done" />
-        <Section title="Not Done" nums={s.notDone} tone="notdone" />
-        <Section title="Absent" nums={s.absent} tone="ink" />
-        <Section title="Unmarked" nums={s.unmarked} tone="amber" />
+        <Section title="Done" nums={s.done} tone="done" labels={checklist.labels} />
+        <Section title="Not Done" nums={s.notDone} tone="notdone" labels={checklist.labels} />
+        <Section title="Absent" nums={s.absent} tone="ink" labels={checklist.labels} />
+        <Section title="Unmarked" nums={s.unmarked} tone="amber" labels={checklist.labels} />
       </div>
 
       <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
