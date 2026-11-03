@@ -7,7 +7,7 @@ import {
 const mk = (over: Partial<Checklist>): Checklist => ({
   id: "x", checklist_date: "2026-10-30", category: "classworks", name: "Test",
   member_count: 5, statuses: "uuuuu", version: 1,
-  created_at: "2026-10-30T08:00:00Z", updated_at: "2026-10-30T08:00:00Z", completed_at: null,
+  created_at: "2026-10-30T08:00:00Z", updated_at: "2026-10-30T08:00:00Z", completed_at: null, labels: {},
   ...over,
 });
 
