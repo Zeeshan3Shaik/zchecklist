@@ -114,7 +114,7 @@ const btn = "inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl 
 const btnGhost = `${btn} glass text-foreground hover:brightness-100 hover:bg-secondary`;
 const inputCls = "w-full rounded-2xl border border-glass-border bg-card px-4 py-3 text-base font-medium text-foreground outline-none transition focus:ring-4 focus:ring-ring/30";
 
-function Field({ label, error, children, htmlFor }: { label: string; error?: string | null; children: ReactNode; htmlFor?: string }) {
+function Field({ label, error, children, htmlFor }: { label: string; error?: string | null | undefined; children: ReactNode; htmlFor?: string }) {
   return (
     <div>
       <label htmlFor={htmlFor} className="mb-1.5 block text-sm font-semibold text-foreground">{label}</label>
@@ -216,7 +216,7 @@ function Home({ name, items, onNew, onHistory, onAnalytics, onImportLegacy }: {
 function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Date | undefined>();
-  return <Popover open={open} onOpenChange={setOpen}><PopoverTrigger asChild><Button className={`${inputCls} justify-between`} aria-label="Choose date"><span>{value ? formatDDMMYY(value) : "DD/MM/YY"}</span><CalendarDays className="h-5 w-5" /></Button></PopoverTrigger><PopoverContent className="glass w-auto rounded-2xl p-3"><Calendar mode="single" selected={selected} onSelect={setSelected} defaultMonth={value ? new Date(`${value}T12:00:00`) : undefined} /><Button disabled={!selected} className={`${btn} btn-blue w-full`} onClick={() => { if (!selected) return; onChange(toISODate(selected.getFullYear(), selected.getMonth() + 1, selected.getDate())); setOpen(false); }}>Done</Button></PopoverContent></Popover>;
+  return <Popover open={open} onOpenChange={setOpen}><PopoverTrigger asChild><Button className={`${inputCls} justify-between`} aria-label="Choose date"><span>{value ? formatDDMMYY(value) : "DD/MM/YY"}</span><CalendarDays className="h-5 w-5" /></Button></PopoverTrigger><PopoverContent className="glass w-auto rounded-2xl p-3"><Calendar mode="single" selected={selected} onSelect={setSelected} defaultMonth={value ? new Date(`${value}T12:00:00`) : new Date()} /><Button disabled={!selected} className={`${btn} btn-blue w-full`} onClick={() => { if (!selected) return; onChange(toISODate(selected.getFullYear(), selected.getMonth() + 1, selected.getDate())); setOpen(false); }}>Done</Button></PopoverContent></Popover>;
 }
 
 function Setup({ date, onCreate, onCancel }: { date: string; onCreate: (input: { name: string; date: string; category: Category; count: number }) => Promise<void>; onCancel: () => void }) {
