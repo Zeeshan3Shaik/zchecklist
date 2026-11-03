@@ -777,7 +777,7 @@ export function ZChecklistApp() {
     const draft = currentRef.current;
     if (!draft) return;
     const fresh = await getChecklist(draft.id).catch(() => null);
-    if (!fresh) return toast.error("Still unable to connect.");
+    if (!fresh) { toast.error("Still unable to connect."); return; }
     if (fresh.version !== confirmedRef.current?.version) {
       toast.error("The cloud copy has changed. Your local draft remains protected. Reload to use the cloud copy rather than overwrite another device.");
       return;
@@ -787,8 +787,9 @@ export function ZChecklistApp() {
 
   const leave = async (destination: Screen) => {
     await saveChain.current;
-    if (failedRef.current) return toast.error("Retry saving before leaving; your work has not been discarded.");
+    if (failedRef.current) { toast.error("Retry saving before leaving; your work has not been discarded."); return; }
     setScreen(destination);
+    return;
   };
 
   const mark = useCallback((member: number, s: StatusCode) => {
@@ -824,7 +825,7 @@ export function ZChecklistApp() {
   const complete = async () => {
     setPrompt(null);
     await saveChain.current;
-    if (failedRef.current) return toast.error("Please retry saving before completing.");
+    if (failedRef.current) { toast.error("Please retry saving before completing."); return; }
     const cur = confirmedRef.current;
     if (!cur) return;
     setSaving(true);
@@ -899,7 +900,7 @@ export function ZChecklistApp() {
   const signOut = async () => {
     setPrompt(null);
     await saveChain.current;
-    if (failedRef.current) return toast.error("Save your pending changes before signing out.");
+    if (failedRef.current) { toast.error("Save your pending changes before signing out."); return; }
     await queryClient.cancelQueries(); queryClient.clear();
     await supabase.auth.signOut();
     setItems([]); setCurrent(null); confirmedRef.current = null; currentRef.current = null;
