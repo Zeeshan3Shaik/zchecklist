@@ -15,13 +15,13 @@ export async function buildWorkbook(c: Checklist, chart?: string) {
     ["Completed", c.completed_at ? new Date(c.completed_at).toLocaleString() : "In progress"],
     ["Generated", new Date().toLocaleString()], [], ["Total members", s.total],
     ["Done", s.done.length], ["Not Done", s.notDone.length], ["Absent", s.absent.length], ["Unmarked", s.unmarked.length],
-    ["Done / total", s.donePct / 100], ["Marked / total", s.markedPct / 100], [], ["Roll Number", "Status"],
+    ["Done / total", s.donePct / 100], ["Marked / total", s.markedPct / 100], [], ["Roll Number", "Name", "Status"],
   ];
   rows.forEach((r) => ws.addRow(r));
-  for (let i = 0; i < c.member_count; i++) ws.addRow([i + 1, STATUS_LABEL[c.statuses[i] as keyof typeof STATUS_LABEL] ?? "Unmarked"]);
+  for (let i = 0; i < c.member_count; i++) ws.addRow([i + 1, c.labels?.[String(i + 1)] ?? "", STATUS_LABEL[c.statuses[i] as keyof typeof STATUS_LABEL] ?? "Unmarked"]);
   ws.getCell("B16").numFmt = "0.0%";
   ws.getCell("B17").numFmt = "0.0%";
-  ws.autoFilter = `A19:B${19 + c.member_count}`;
+  ws.autoFilter = `A19:C${19 + c.member_count}`;
   ws.pageSetup = { orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
   const analytics = wb.addWorksheet("Analytics");
   analytics.addRows([["ZChecklist — Status Distribution"], [], ["Status", "Observations", "Of total"],
@@ -42,8 +42,8 @@ export async function buildWorkbook(c: Checklist, chart?: string) {
         row.eachCell((cell) => { cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF6D28D9" } }; cell.font = { name: "Calibri", bold: true, color: { argb: "FFFFFFFF" }, size: n === 1 ? 16 : 12 }; });
       }
       if (sheet === ws && n >= 20) {
-        const color = colors[String(row.getCell(2).value)];
-        row.getCell(2).font = { name: "Calibri", bold: true, color: { argb: color ?? "FF475569" } };
+        const color = colors[String(row.getCell(3).value)];
+        row.getCell(3).font = { name: "Calibri", bold: true, color: { argb: color ?? "FF475569" } };
       }
     });
   }
