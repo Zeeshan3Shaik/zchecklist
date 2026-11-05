@@ -160,7 +160,7 @@ function Welcome({ onContinue }: { onContinue: () => void }) {
 
 /* ---------------- Auth ---------------- */
 /* ---------------- Home ---------------- */
-function Home({ name, items, onNew, onHistory, onAnalytics, onImportLegacy }: {
+function Home({ name, items, onNew, onHistory, onAnalytics, onImportLegacy, onFrameworks }: {
   name: string;
   items: Checklist[];
   onNew: (date: string) => void;
@@ -230,6 +230,7 @@ function Setup({ date, framework, onCreate, onCancel }: { date: string; framewor
   const [count, setCount] = useState(""); const [step, setStep] = useState<"category" | "count" | "name">("category");
   const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
   const icons = [BookOpen, GraduationCap, CalendarDays, Layers];
+  const fw = framework;
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); if (busy) return;
     if (step === "count") {
@@ -726,8 +727,8 @@ function FrameworksScreen({ onBack, onUse }: { onBack: () => void; onUse: (f: Fr
   useEffect(() => { load(); }, []);
   const make = async (e: React.FormEvent) => {
     e.preventDefault(); if (busy) return;
-    const n = validateChecklistName(name); if (!n.ok) return toast.error(n.error);
-    const c = validateCount(count); if (!c.ok) return toast.error(c.error);
+    const n = validateChecklistName(name); if (!n.ok) { toast.error(n.error); return; }
+    const c = validateCount(count); if (!c.ok) { toast.error(c.error); return; }
     setBusy(true);
     try { await createFramework({ name: n.value, member_count: c.value, labels: {} }); setName(""); setCount(""); load(); toast.success("Framework saved."); }
     catch { toast.error("Couldn't save the framework."); }
@@ -1105,6 +1106,7 @@ export function ZChecklistApp() {
             </div>
           )}
         </main>
+        </div>
       </div>
 
       {prompt === "unmarked" && sum && (
