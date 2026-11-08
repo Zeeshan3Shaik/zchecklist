@@ -4,6 +4,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { AccountAuth, ProfileScreen } from "./AccountScreens";
 import { AboutScreen, FaqScreen } from "./InfoScreens";
+import { FrameworkScreens } from "./FrameworkScreens";
+import { checklistFromFramework } from "@/lib/frameworks";
 import { buildWorkbook } from "@/lib/workbook";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -167,7 +169,7 @@ function Home({ name, items, onNew, onHistory, onAnalytics, onImportLegacy, onFr
   onHistory: () => void;
   onAnalytics: () => void;
   onImportLegacy: () => void;
-  onFrameworks: () => void;
+  onFrameworks: (mode: "make" | "load") => void;
 }) {
   const legacy = useMemo(() => readLegacy(), []);
   const [date, setDate] = useState("");
@@ -188,8 +190,8 @@ function Home({ name, items, onNew, onHistory, onAnalytics, onImportLegacy, onFr
       )}
 
       <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-        <Button onClick={onFrameworks} className={`${btnGhost} flex-1 justify-start`}><Save className="h-4 w-4" /> Make a checklist framework</Button>
-        <Button onClick={onFrameworks} className={`${btnGhost} flex-1 justify-start`}><FolderOpen className="h-4 w-4" /> Load a checklist framework</Button>
+        <Button onClick={() => onFrameworks("make")} className={`${btnGhost} flex-1 justify-start`}><Save className="h-4 w-4" /> Make a checklist framework</Button>
+        <Button onClick={() => onFrameworks("load")} className={`${btnGhost} flex-1 justify-start`}><FolderOpen className="h-4 w-4" /> Load a checklist framework</Button>
       </div>
       <div className="home-frame relative mt-8 grid gap-4 pb-8 sm:grid-cols-3">
         <Button onClick={() => { if (date) onNew(date); else toast.error("Select a date first."); }} className="glass anim-rise group flex flex-col items-start gap-6 rounded-[28px] px-6 py-9 text-left transition hover:-translate-y-1 hover:shadow-lg" style={{ animationDelay: "80ms" }}>
@@ -717,55 +719,11 @@ function AnalyticsScreen({ items, onBack }: { items: Checklist[]; onBack: () => 
   );
 }
 
-/* ---------------- Frameworks ---------------- */
-function FrameworksScreen({ onBack, onUse }: { onBack: () => void; onUse: (f: Framework) => void }) {
-  const [items, setItems] = useState<Framework[] | null>(null);
-  const [name, setName] = useState("");
-  const [count, setCount] = useState("");
-  const [busy, setBusy] = useState(false);
-  const load = () => listFrameworks().then(setItems).catch(() => toast.error("Couldn't load your frameworks."));
-  useEffect(() => { load(); }, []);
-  const make = async (e: React.FormEvent) => {
-    e.preventDefault(); if (busy) return;
-    const n = validateChecklistName(name); if (!n.ok) { toast.error(n.error); return; }
-    const c = validateCount(count); if (!c.ok) { toast.error(c.error); return; }
-    setBusy(true);
-    try { await createFramework({ name: n.value, member_count: c.value, labels: {} }); setName(""); setCount(""); load(); toast.success("Framework saved."); }
-    catch { toast.error("Couldn't save the framework."); }
-    finally { setBusy(false); }
-  };
-  return (
-    <div className="anim-rise mx-auto w-full max-w-3xl px-4 pb-20 sm:px-6">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-4xl font-extrabold tracking-normal text-foreground sm:text-5xl">Frameworks</h1>
-        <Button onClick={onBack} className={btnGhost}>Back Home</Button>
-      </div>
-      <form onSubmit={make} className="glass mt-6 flex flex-col gap-3 rounded-[24px] p-5 sm:flex-row sm:items-end">
-        <div className="flex-1"><Field label="Framework name"><input aria-label="Framework name" value={name} onChange={(e) => setName(e.target.value)} className={inputCls} placeholder="e.g. Class 8A roster" /></Field></div>
-        <div className="w-full sm:w-36"><Field label="Members"><input aria-label="Framework members" inputMode="numeric" value={count} onChange={(e) => setCount(e.target.value)} className={inputCls} placeholder="1–100" /></Field></div>
-        <Button type="submit" disabled={busy} className={`${btn} btn-blue`}><Save className="h-4 w-4" /> Make a checklist framework</Button>
-      </form>
-      <div className="mt-6 flex flex-col gap-2">
-        {items === null ? <p className="text-muted-foreground">Loading…</p> : items.length === 0 ? (
-          <div className="glass rounded-[24px] p-8 text-center text-muted-foreground">No frameworks yet. Make one above, then load it whenever you start a checklist.</div>
-        ) : items.map((f) => (
-          <div key={f.id} className="glass flex flex-col gap-3 rounded-[22px] p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><p className="text-lg font-bold text-foreground">{f.name}</p><p className="text-sm text-muted-foreground">{f.member_count} members{Object.keys(f.labels).length ? ` · ${Object.keys(f.labels).length} named` : ""}</p></div>
-            <div className="flex shrink-0 gap-2">
-              <Button onClick={() => onUse(f)} className={`${btn} btn-blue px-4`}><FolderOpen className="h-4 w-4" /> Load a checklist framework</Button>
-              <Button onClick={async () => { try { await deleteFramework(f.id); load(); } catch { toast.error("Couldn't delete it."); } }} className={`${btn} btn-red px-4`} aria-label={`Delete ${f.name}`}><Trash2 className="h-4 w-4" /></Button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /* ---------------- App ---------------- */
 export function ZChecklistApp() {
   const queryClient = useQueryClient();
   const [draftDate, setDraftDate] = useState("");
+  const [frameworkMode, setFrameworkMode] = useState<"make" | "load">("load");
   const [draftFramework, setDraftFramework] = useState<Framework | null>(null);
   const [saveError, setSaveError] = useState(false);
   const failedRef = useRef(false);
@@ -815,7 +773,7 @@ export function ZChecklistApp() {
         const raw = localStorage.getItem(`zchecklist_draft_${user.id}`);
         const draft = raw ? JSON.parse(raw) as Checklist : null;
         const saved = draft ? rows.find((r) => r.id === draft.id) : null;
-        if (draft && saved && saved.version === draft.version && draft.statuses !== saved.statuses) {
+        if (draft && saved && saved.version === draft.version && (draft.statuses !== saved.statuses || JSON.stringify(draft.labels) !== JSON.stringify(saved.labels))) {
           confirmedRef.current = saved; currentRef.current = draft; setCurrent(draft); failedRef.current = true; setSaveError(true); setScreen("checklist");
         }
       } catch { /* corrupted local protection never replaces cloud records */ }
@@ -844,14 +802,14 @@ export function ZChecklistApp() {
       const base = confirmedRef.current;
       if (!base || base.id !== next.id || userRef.current?.id !== owner || failedRef.current) return;
       try {
-        const row = await updateChecklist(next.id, base.version, { statuses: next.statuses });
+        const row = await updateChecklist(next.id, base.version, { statuses: next.statuses, labels: next.labels });
         if (userRef.current?.id !== owner) return;
         confirmedRef.current = row; replaceItem(row);
         const latest = currentRef.current;
         if (latest?.id === row.id) {
           const merged = { ...latest, version: row.version, updated_at: row.updated_at };
           currentRef.current = merged; setCurrent(merged);
-          try { if (merged.statuses === row.statuses) localStorage.removeItem(`zchecklist_draft_${owner}`); else localStorage.setItem(`zchecklist_draft_${owner}`, JSON.stringify(merged)); } catch { /* optional protection */ }
+          try { if (merged.statuses === row.statuses && JSON.stringify(merged.labels) === JSON.stringify(row.labels)) localStorage.removeItem(`zchecklist_draft_${owner}`); else localStorage.setItem(`zchecklist_draft_${owner}`, JSON.stringify(merged)); } catch { /* optional protection */ }
         }
       } catch (e) {
         failedRef.current = true; setSaveError(true);
@@ -894,25 +852,13 @@ export function ZChecklistApp() {
     const next = { ...cur, labels: setLabel(cur.labels ?? {}, member, name) };
     currentRef.current = next;
     setCurrent(next);
-    const owner = userRef.current?.id;
-    if (owner) try { localStorage.setItem(`zchecklist_draft_${owner}`, JSON.stringify(next)); } catch { /* in-memory draft remains */ }
-    setSaving(true);
-    saveChain.current = saveChain.current.then(async () => {
-      const base = confirmedRef.current;
-      if (!base || base.id !== next.id || failedRef.current) return;
-      try {
-        const row = await updateChecklist(next.id, base.version, { labels: next.labels });
-        confirmedRef.current = row; replaceItem(row);
-        const latest = currentRef.current;
-        if (latest?.id === row.id) { const m = { ...latest, version: row.version, updated_at: row.updated_at }; currentRef.current = m; setCurrent(m); }
-      } catch { failedRef.current = true; setSaveError(true); toast.error("Save failed. Your work is retained. Retry before leaving."); }
-    }).finally(() => setSaving(false));
-  }, [replaceItem]);
+    queueSave(next);
+  }, [queueSave]);
 
   /* ----- actions ----- */
   const create = async (input: { name: string; date: string; category: Category; count: number; labels?: Record<string, string> }) => {
     try {
-      const row = await createChecklist({
+      const row = await createChecklist(draftFramework ? checklistFromFramework(draftFramework, input.name, input.date, input.category) : {
         checklist_date: input.date,
         category: input.category,
         name: input.name,
@@ -920,6 +866,7 @@ export function ZChecklistApp() {
         statuses: blankStatuses(input.count),
         labels: input.labels ?? {},
       });
+      setDraftFramework(null);
       failedRef.current = false; setSaveError(false);
       confirmedRef.current = row;
       currentRef.current = row;
@@ -1075,11 +1022,11 @@ export function ZChecklistApp() {
                 <Home
                   name={profileName}
                   items={items}
-                  onNew={(date) => { setDraftDate(date); setScreen("setup"); }}
+                  onNew={(date) => { setDraftFramework(null); setDraftDate(date); setScreen("setup"); }}
                   onHistory={() => setScreen("history")}
                   onAnalytics={() => setScreen("analytics")}
                   onImportLegacy={importLegacy}
-                  onFrameworks={() => setScreen("frameworks")}
+                  onFrameworks={(mode) => { setFrameworkMode(mode); setScreen("frameworks"); }}
                 />
               )}
               {screen === "setup" && <Setup date={draftDate} framework={draftFramework} onCreate={create} onCancel={() => { setDraftFramework(null); setScreen("home"); }} />}
@@ -1098,7 +1045,7 @@ export function ZChecklistApp() {
                   onBack={() => setScreen("home")}
                 />
               )}
-              {screen === "frameworks" && <FrameworksScreen onBack={() => setScreen("home")} onUse={(f) => { if (!draftDate) { toast.error("Select a date on Home first."); setScreen("home"); return; } setDraftFramework(f); setScreen("setup"); }} />}
+              {screen === "frameworks" && <FrameworkScreens mode={frameworkMode} onBack={() => setScreen("home")} onUse={(f) => { setDraftDate(todayISO()); setDraftFramework(f); setScreen("setup"); }} />}
               {screen === "about" && <AboutScreen />}
               {screen === "faqs" && <FaqScreen />}
               {screen === "profile" && user && <ProfileScreen user={user} onSaved={() => { fetchProfile(user.id).then((p) => setProfileName(p?.name ?? "there")); }} />}

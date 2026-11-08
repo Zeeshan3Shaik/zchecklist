@@ -1,4 +1,7 @@
 # ZChecklist completion
+- [ ] Add secure verified Profile email changes; validate uniqueness, cooldowns and attempt limits.
+- [ ] Correct framework name/count/label/save and preview/category/name/load workflows.
+- [ ] Verify framework persistence and isolation, email safeguards, and account UI; document hosted-email setting blockers.
 - [x] Finish verified real-email signup, username login, recovery and profile settings, preserving private account isolation.
 - [x] Finish date/category/count/name flow and consistent navigation.
 - [x] Protect pending saves, retry failures, completion and restoration.

@@ -65,7 +65,7 @@ export async function createFramework(input: { name: string; member_count: numbe
   if (error) throw error;
   return data as Framework;
 }
-export async function updateFramework(id: string, patch: { name?: string; labels?: Record<string, string> }) {
+export async function updateFramework(id: string, patch: { name?: string; member_count?: number; labels?: Record<string, string> }) {
   const { data, error } = await supabase.from("frameworks").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id).select(FCOLS).single();
   if (error) throw error;
   return data as Framework;

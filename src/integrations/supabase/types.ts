@@ -59,6 +59,27 @@ export type Database = {
         }
         Relationships: []
       }
+      email_change_requests: {
+        Row: {
+          attempts: number
+          pending_email: string
+          sent_at: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          pending_email: string
+          sent_at?: string
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          pending_email?: string
+          sent_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       frameworks: {
         Row: {
           created_at: string
@@ -115,7 +136,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      claim_email_change_attempt: {
+        Args: { _email: string; _user_id: string }
+        Returns: string
+      }
+      reserve_email_change: {
+        Args: { _email: string; _user_id: string }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

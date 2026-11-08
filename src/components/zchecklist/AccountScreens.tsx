@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { loginWithUsername } from "@/lib/auth.functions";
 import { validateDisplayName, validatePassword, validateUsername } from "@/lib/zchecklist";
+import { ChangeEmail } from './ChangeEmail';
 
 const input = "w-full rounded-2xl border border-glass-border bg-card px-4 py-3 text-foreground outline-none focus:ring-4 focus:ring-ring/30";
 const action = "btn-blue min-h-11 rounded-2xl px-5 py-3 font-semibold";
@@ -71,6 +72,7 @@ export function AccountAuth() {
 }
 
 export function ProfileScreen({ user, onSaved }: { user: User; onSaved: () => void }) {
+  const [currentEmail, setCurrentEmail] = useState(user.email);
   const [name, setName] = useState(""); const [username, setUsername] = useState(""); const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   if (!loaded) { setLoaded(true); void supabase.from("profiles").select("name, username").eq("id", user.id).single().then(({ data }) => { if (data) { setName(data.name); setUsername(data.username); } }); }
@@ -82,7 +84,7 @@ export function ProfileScreen({ user, onSaved }: { user: User; onSaved: () => vo
     if (error) toast.error("Couldn't save. This username may already be taken."); else { toast.success("Profile saved."); onSaved(); }
     return;
   };
-  return <form onSubmit={save} className="glass mx-auto max-w-lg space-y-5 rounded-[28px] p-7"><h1 className="text-3xl font-extrabold">Profile</h1><label className="block">Name<input aria-label="Name" className={input} value={name} onChange={(e) => setName(e.target.value)} /></label><label className="block">Username<input aria-label="Username" className={input} value={username} onChange={(e) => setUsername(e.target.value)} /></label><p className="break-all text-sm text-muted-foreground">Email: {user.email}</p><Button disabled={busy} className={action}>Save Profile</Button><h2 className="text-xl font-bold">Security &amp; Password</h2><Button type="button" variant="outline" onClick={async () => { if (!user.email) return; const { error } = await supabase.auth.resetPasswordForEmail(user.email, { redirectTo: `${window.location.origin}/reset-password` }); if (error) toast.error("Couldn't request recovery."); else toast.success("Password recovery instructions requested. Check your email."); }}>Reset Password</Button></form>;
+  return <div className="glass mx-auto max-w-lg space-y-5 rounded-[28px] p-7"><form onSubmit={save} className="space-y-5"><h1 className="text-3xl font-extrabold">Profile</h1><label className="block">Name<input aria-label="Name" className={input} value={name} onChange={(e) => setName(e.target.value)} /></label><label className="block">Username<input aria-label="Username" className={input} value={username} onChange={(e) => setUsername(e.target.value)} /></label><p className="break-all text-sm text-muted-foreground">Email: {currentEmail}</p><Button disabled={busy} className={action}>Save Profile</Button></form><ChangeEmail onChanged={setCurrentEmail} /><h2 className="text-xl font-bold">Security &amp; Password</h2><Button type="button" variant="outline" onClick={async () => { if (!currentEmail) return; const { error } = await supabase.auth.resetPasswordForEmail(currentEmail, { redirectTo: `${window.location.origin}/reset-password` }); if (error) toast.error("Couldn't request recovery."); else toast.success("Password recovery instructions requested. Check your email."); }}>Reset Password</Button></div>;
 }
 
 export function RecoveryScreen() {

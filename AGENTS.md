@@ -13,4 +13,6 @@
 - Centralize status/report calculations in zchecklist.ts, analytics in analytics.ts and Excel generation in workbook.ts so all exports use the same saved observations.
 - Serialize version-checked writes and retain owner-scoped pending drafts locally until confirmed; never report failed writes as saved or complete pending work.
 - Member labels live in checklists.labels (JSON member-number -> name); reusable rosters live in the owner-scoped frameworks table so daily checklists can be created without re-entering members.
+- FrameworkScreens owns explicit roster editing; checklistFromFramework copies labels and starts fresh statuses so daily edits never mutate reusable templates.
+- Profile email changes use authenticated server functions and Cloud Auth OTP verification; service-only request guards enforce uniqueness, cooldown and attempt budgets without storing codes. Auth remains the final uniqueness/confirmation authority.
 - Authenticated navigation uses a left sidebar (Home/About/FAQs/Sign Out) with Profile top-right; the checklist screen keeps its own Exit/Complete header controls.
